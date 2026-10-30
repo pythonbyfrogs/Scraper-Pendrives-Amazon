@@ -1,94 +1,89 @@
-#Imports
-from bs4 import BeautifulSoup
 import pandas as pd
-import requests
 import time
+from datetime import datetime
+from pathlib import Path
+from Scrapers import Amazon_Kingston
+from Scrapers import Amazon_SanDisk
 
-#Acess to web
-url = "https://www.amazon.com.br/s?k=pendrive"
-session = requests.Session()
-
-headers = {
-        "User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
-        "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language":"pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3",
-        "Connection":"keep-alive",
-        "Upgrade-Insecure-Requests":"1"
-    }
-
-#Entering the site
-def enter_site():
-    for trin in range(1, 6):
+def run_scraper(scraper_function):
+    for attempt in range(1, 6):
         try:
-            time.sleep(2)
-            code = session.get(url, headers=headers, timeout=20)
+            products = run_scraper(scraper_function)
 
-            if code.status_code == 200:
-                print("Just pythonic!")
-                return code
+            if products:
+                return products
 
-            print(
-                f"Try {trin}/5: "
-                f"HTTP {code.status_code}"
-            )
+            print(f"Attempt {attempt}/5: nothing found.")
 
-        except requests.exceptions.RequestException as error:
-            print(f"Try {trin}/5: {error}")
+        except Exception as error:
+            print(f"Attempt {attempt}/5: {error}")
 
-        if trin < 5:
+        if attempt < 5:
             time.sleep(5)
 
-    print("Site cannot be acessed in 5 trys.")
-    return None
+    print("Fail after 5 attempts.")
+    return []
 
-#Acessing
-code = enter_site()
-if code is None:
-    print ("Error at scraping")
-else:
-    soup = BeautifulSoup(code.text, 'html.parser')
+#Saving in "Dataframes" folder
+data_folder = Path("Dataframes")
+data_folder.mkdir(exist_ok=True)
+date = datetime.now().strftime("%Y-%m-%d")
 
+def main():
+    all_products = []
 
+    scrapers = [
+        ("Amazon_Kingston", Amazon_Kingston.scraper),
+        ("Amazon_SanDisk", Amazon_SanDisk.scraper)
+    ]
 
-    #Pick offers
-    time.sleep(2)
-    offers_products = soup.find_all("div", attrs={"data-component-type":"s-search-result"})
+    for store_name, scraper_function in scrapers:
+        print(f"\nScraping {store_name}...")
 
-    list_products = []
-
-    for b in offers_products:
         try:
-            #Title
-            tag_title = b.find("h2", attrs={"class":"a-size-base-plus a-spacing-none a-color-base a-text-normal"})
-            Product = tag_title.text.strip() if tag_title else "Unavailable"
+            products = scraper_function()
 
-            #Search for price
-            tag_price = b.find("span", attrs={"class":"a-price"})
-            dirt_price = tag_price.text.strip() if tag_price else "Unavailable"
-            if "R$" in dirt_price:
-                price = "R$" + dirt_price.split("R$")[1].strip()
-            else:
-                price = dirt_price
-            
-            #Validate
-            if (
-                not Product.strip()
-                or Product == "Unavailable"
-                or not price.startswith("R$")
-            ):
-                continue
+            for product in products:
+                all_products.append({
+                    "Store": store_name,
+                    "Product": product["Product"],
+                    "Price": product["Price"],
+                })
 
-            list_products.append({"Product": Product, "Price": price})
-            print(f"Product: {Product} | Price: {price}")
+            print(f"Products collected: {len(products)}")
 
-        except Exception:
-            continue
+        except Exception as error:
+            print(f"Error scraping {store_name}: {error}")
 
-    #Create DataFrame
-    if list_products:
-        df = pd.DataFrame(list_products)
-        df = df.drop_duplicates(subset=["Product", "Price"])
-        df.to_csv("Pendrives_amazon.csv", index= False, encoding="utf-8")
-        print("\n DataFrame generated!")
+    if not all_products:
+        print("\nNo products were collected.")
+        return
+
+    dataframe = pd.DataFrame(all_products)
+    print("\nChoose the export format:")
+    print("1 - CSV")
+    print("2 - Excel (.xlsx)")
+    choice = input("Your choice (1/2): ").strip()
+
+    if choice == "1":
+        dataframe.to_csv(
+            data_folder / f"pendrives_{date}.csv",
+            index=False,
+            sep=";",
+            encoding="utf-8-sig"
+        )
+        print(f"pendrives_{date}.csv")
+
+    elif choice == "2":
+        dataframe.to_excel(
+            "isopodes.xlsx",
+            index=False
+        )
+        print(f"pendrives_{date}.xlsx")
+
     else:
-        print("\n Error at generating DataFrame")
+        print("\nInvalid option. No file was exported.")
+
+
+if __name__ == "__main__":
+    main()
