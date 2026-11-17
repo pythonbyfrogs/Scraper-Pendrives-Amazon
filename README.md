@@ -13,7 +13,7 @@ This "web scraper" aims to collect ads from pendrives in Amazon, collecting the 
 1. Clone the repository:
  ```bash
 git clone https://github.com/pythonbyfrogs/Scraper-Pendrives-Amazon
-cd "Scraper Pendrives Amazon"
+cd "Scraper-Pendrives-Amazon"
 ```
 2. Install dependencies:
 ```bash
